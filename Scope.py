@@ -1,64 +1,74 @@
 from tkinter import *
-import ctypes
 from tkinter import ttk, font, messagebox
 from PIL import ImageTk, Image
 from datetime import date
 import webbrowser
 import json
-from win32 import win32gui
-from win32.win32gui import GetWindowText, GetForegroundWindow
-import subprocess
-from ctypes import wintypes, windll, create_unicode_buffer
-from pycaw.pycaw import AudioUtilities, ISimpleAudioVolume
-from typing import Optional
+from win32 import win32gui, win32api
+import win32process, psutil
+from pycaw.pycaw import AudioUtilities
 
-'''
 def getFocusedWindow():
     try:
         pid = win32process.GetWindowThreadProcessId(win32gui.GetForegroundWindow())
         return(psutil.Process(pid[-1]).name())
     except:
         pass
-'''
+
 def applyRules():
-    #print(getFocusedWindow())
+    print("a")
+
     rulePrograms = []
     ruleBehavior = []
 
     with open("appdata.json") as rFile:
         data = json.load(rFile)
+        enabled = data["settings"]["enabled"]
         for rule in data["rules"]:
             rulePrograms.append(rule)
             ruleBehavior.append(data["rules"][rule]["behavior"])
-    
+
     sessions = AudioUtilities.GetAllSessions()
-    cmd = 'powershell "gps | where {$_.MainWindowTitle } | select Description'
-    proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
-    for p in proc.stdout:
-        progName = ""
-        if p.rstrip():
-            progName = p.decode().rstrip()
-        if (progName in rulePrograms):    
-            for session in sessions:
-                volume = session._ctl.QueryInterface(ISimpleAudioVolume)
-                if (session.Process):
-                    #print(session.Process.name())
-                    currentBehavior = ruleBehavior[rulePrograms.index(progName)]
-                    volume.SetMasterVolume(0, None)
-                    #print(active_window_process_name())
-                    
+    for session in sessions:
+        volume = session.SimpleAudioVolume
+        if session.Process:
+            processName = session.Process.name().lower()
+            if processName in rulePrograms:
+                focused = False
+                i = rulePrograms.index(processName)
+                if (getFocusedWindow().lower() == processName):
+                    focused = True
+                if (enabled):
+                    if (ruleBehavior[i] == 0 and (not focused)):
+                        volume.SetMute(1, None)
+                    elif (ruleBehavior[i] == 1 and (focused)):
+                        volume.SetMute(1, None)
+                    elif (ruleBehavior[i] == 0 and (focused)):
+                        volume.SetMute(0, None)
+                    elif (ruleBehavior[i] == 1 and (not focused)):
+                        volume.SetMute(0, None)
+
+                else:
+                    volume.SetMute(0, None)
+            else:
+                volume.SetMute(0, None)
+        else:
+            volume.SetMute(0, None)
+    root.after(200, applyRules)
 
 def getActivePrograms():
     global programs
-    sessions = AudioUtilities.GetAllSessions()
     programs = []
-    cmd = 'powershell "gps | where {$_.MainWindowTitle } | select Description'
-    proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
-    for line in proc.stdout:
-        if line.rstrip():
-            prog = line.decode().rstrip()
-            if (not prog == "Description" and not prog == "-----------" and not prog == "Application Frame Host" and not prog == "Settings"):
-                programs.append(prog)
+    psutil.process_iter(attrs=None, ad_value=None)
+    for proc in psutil.process_iter():
+        try:
+            # Get process name & pid from process object.
+            processName = proc.name()
+            if (not processName.lower() in programs):
+                programs.append(processName.lower())
+        except:
+            pass
+    programs.sort()
     return programs
 
 def createImage(root, imgPath, size):
@@ -325,3 +335,8 @@ deleteButton.place(x=930, y=575)
 
 applyRules()
 root.mainloop()
+
+sessions = AudioUtilities.GetAllSessions()
+for session in sessions:
+    volume = session.SimpleAudioVolume
+    volume.SetMute(0, None)

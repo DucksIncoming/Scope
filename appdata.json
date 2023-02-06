@@ -1,20 +1,12 @@
 {
     "rules": {
-        "Python": {
-            "behavior": 0,
-            "date": "2023-02-06"
-        },
-        "Spotify": {
-            "behavior": 1,
-            "date": "2023-02-06"
-        },
-        "Google Chrome": {
+        "spotify.exe": {
             "behavior": 0,
             "date": "2023-02-06"
         }
     },
     "settings": {
-        "enabled": true,
+        "enabled": false,
         "minimize": true,
         "startWithWindows": true
     }
