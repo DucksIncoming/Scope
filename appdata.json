@@ -1,7 +1,12 @@
 {
-    "rules": {},
+    "rules": {
+        "valorant.exe": {
+            "behavior": 0,
+            "date": "2023-02-06"
+        }
+    },
     "settings": {
-        "enabled": false,
+        "enabled": true,
         "minimize": true,
         "startWithWindows": true
     }
