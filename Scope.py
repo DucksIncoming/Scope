@@ -4,7 +4,23 @@ from PIL import ImageTk, Image
 from datetime import date
 import webbrowser
 import json
+import subprocess
 import os
+
+def getActivePrograms():
+    global programs
+    programs = []
+    cmd = 'powershell "gps | where {$_.MainWindowTitle } | select Description'
+    proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
+    for line in proc.stdout:
+        if line.rstrip():
+            # only print lines that are not empty
+            # decode() is necessary to get rid of the binary string (b')
+            # rstrip() to remove `\r\n`
+            prog = line.decode().rstrip()
+            if (not prog == "Description" and not prog == "-----------" and not prog == "Application Frame Host"):
+                programs.append(prog)
+    return programs
 
 def createImage(root, imgPath, size):
     img = Image.open(imgPath)
@@ -96,7 +112,7 @@ def addRule():
     refreshRuleTree()
 
 def getActiveRules():
-    programs = []
+    programList = []
     behaviors = []
     dates = []
 
@@ -105,10 +121,10 @@ def getActiveRules():
         data = data["rules"]
         for rule in data:
             tempData = data[rule]
-            programs.append(rule)
+            programList.append(rule)
             behaviors.append(tempData["behavior"])
             dates.append(tempData["date"])
-        return [programs, behaviors, dates]
+        return [programList, behaviors, dates]
 
 def edit():
     currentItem = ruleTree.focus()
@@ -212,7 +228,7 @@ programLabel = Label(root, text="Program", font=("Roboto", 18), foreground="#CEC
 programLabel.place(x=210, y=260)
 
 # Program dropdown menu
-programs = ["program1","program2","program3"]
+programs = getActivePrograms()
 selectedProgram = StringVar(root)
 selectedProgram.set("Select Program")
 programList = ttk.Combobox(root, values=programs, state="readonly", textvariable=selectedProgram)
