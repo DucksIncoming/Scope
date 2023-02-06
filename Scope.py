@@ -16,8 +16,6 @@ def getFocusedWindow():
         pass
 
 def applyRules():
-    print("a")
-
     rulePrograms = []
     ruleBehavior = []
 

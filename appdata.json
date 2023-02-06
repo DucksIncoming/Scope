@@ -1,10 +1,5 @@
 {
-    "rules": {
-        "spotify.exe": {
-            "behavior": 0,
-            "date": "2023-02-06"
-        }
-    },
+    "rules": {},
     "settings": {
         "enabled": false,
         "minimize": true,
