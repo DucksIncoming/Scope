@@ -3,6 +3,10 @@
         "valorant.exe": {
             "behavior": 0,
             "date": "2023-02-06"
+        },
+        "valorant-win64-shipping.exe": {
+            "behavior": 0,
+            "date": "2023-02-06"
         }
     },
     "settings": {
