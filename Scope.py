@@ -1,8 +1,8 @@
 from tkinter import *
-from tkinter import ttk
+from tkinter import ttk, font, messagebox
 from PIL import ImageTk, Image
 from datetime import date
-from tkinter import messagebox
+import webbrowser
 import json
 import os
 
@@ -24,10 +24,55 @@ def createImageButton(root, imgPath, size, bCommand=None):
     return button
 
 def settingsToggle():
-    pass
+    # Settings popup window setup
+    global settingsPopup
+    global startWithWindows
+    global minimize
+    settingsPopup = Toplevel(root, background="#1e1e1e")
+    settingsPopup.geometry("400x200")
+    settingsPopup.resizable(width=False, height=False)
 
-def behaviorSelect():
-    pass
+    # Settings text label
+    settingsTitle = Label(settingsPopup, text="Settings", font=("Roboto", 16), foreground="white", background="#1e1e1e", )
+    settingsTitle.pack(pady=10)
+
+    # Checkboxes
+    startWithWindows = IntVar(settingsPopup)
+    startWinCheckbox = Checkbutton(settingsPopup, variable=startWithWindows, command=settingSelect, text="Start with Windows", font=("Roboto", 12), background="#1e1e1e", foreground="white", activebackground="#1e1e1e", activeforeground="white", selectcolor="black")
+    minimize = IntVar(settingsPopup)
+    minimizeCheckbox = Checkbutton(settingsPopup, variable=minimize, command=settingSelect, text="Minimize to Tray", font=("Roboto", 12), background="#1e1e1e", foreground="white", activebackground="#1e1e1e", activeforeground="white", selectcolor="black")
+
+    with open("appdata.json") as rFile:
+        data = json.load(rFile)
+        startWithWindows.set(int(data["settings"]["startWithWindows"]))
+        minimize.set(int(data["settings"]["minimize"]))
+    
+    if (bool(startWithWindows.get())):
+        startWinCheckbox.select()
+    if (bool(minimize.get())):
+        minimizeCheckbox.select()
+
+    startWinCheckbox.pack()
+    minimizeCheckbox.pack()
+
+    # Github Link
+    link = Label(settingsPopup, text="Github Repo", fg="#CED5FF", cursor="hand2", background="#1e1e1e", font=("Roboto", 12))
+    link.pack(pady=20)
+    link.bind("<Button-1>", lambda e: webbrowser.open_new("https://github.com/DucksIncoming/Scope"))
+    f = font.Font(link, link.cget("font"))
+    f.configure(underline=True)
+    link.configure(font=f)
+
+def settingSelect():
+    global startWithWindows
+    global minimize
+
+    with open("appdata.json") as rFile:
+        data = json.load(rFile)
+        data["settings"]["startWithWindows"] = bool(startWithWindows.get())
+        data["settings"]["minimize"] = bool(minimize.get())
+    with open("appdata.json", "w") as f:
+        json.dump(data, f, indent=4)
 
 def refreshRuleTree():
     ruleTree.delete(*ruleTree.get_children())
@@ -39,13 +84,13 @@ def refreshRuleTree():
         ruleTree.insert('', 'end', text=str(i), values=(rules[0][i], textBehavior, rules[2][i]))
 
 def addRule():
-    with open("rules.json") as rFile:
+    with open("appdata.json") as rFile:
         data = json.load(rFile)
         tempData = data["rules"]
         if (selectedProgram.get() == "Select Program"):
             return
         tempData[selectedProgram.get()] = {"behavior": behavior.get(), "date": str(date.today())}
-    with open("rules.json", "w") as f:
+    with open("appdata.json", "w") as f:
         json.dump(data, f, indent=4)
 
     refreshRuleTree()
@@ -55,7 +100,7 @@ def getActiveRules():
     behaviors = []
     dates = []
 
-    with open("rules.json") as rFile:
+    with open("appdata.json") as rFile:
         data = json.load(rFile)
         data = data["rules"]
         for rule in data:
@@ -79,14 +124,14 @@ def delete():
     try:
         delResponse = messagebox.askyesno("Scope", "Delete rule for '" + str(currentItem["values"][0]) + "'?")
         if (delResponse):
-            with open('rules.json') as in_file:
+            with open('appdata.json') as in_file:
                 data = json.load(in_file)
                 tempData = data["rules"]
                 for element in tempData:
                     if (str(element) == currentItem["values"][0]):
                         del data["rules"][element]
                         break
-                with open("rules.json", "w") as f:
+                with open("appdata.json", "w") as f:
                     json.dump(data, f, indent=4)
             refreshRuleTree()
     except:
@@ -97,15 +142,26 @@ def sliderToggle():
     if (enabled):
         enabled = False
         img = createImage(root, "Images/slider_0.png", (220,80))
-        sliderButton.config(image=img)
         sliderText.config(text="Disabled", foreground="#f78686")
-        sliderButton.image = img
+        
     else:
         enabled = True
         img = createImage(root, "Images/slider_1.png", (220,80))
-        sliderButton.config(image=img)
         sliderText.config(text="Enabled", foreground="#b6d7a8")
-        sliderButton.image = img
+    sliderButton.config(image=img)
+    sliderButton.image = img
+
+    with open("appdata.json") as rFile:
+        data = json.load(rFile)
+        tempData = data["settings"]
+        tempData["enabled"] = enabled
+    with open("appdata.json", "w") as f:
+        json.dump(data, f, indent=4)
+
+# Global variables
+global startWithWindows
+global minimize
+global enabled
 
 # Base window setup
 root = Tk()
@@ -126,16 +182,24 @@ settingsButton.place(x=10, y=10)
 
 # Scope Title at top of page
 scopeImage = createImageLabel(root, "Images/scopeTitle.png", (220,120))
-scopeImage.pack()
+scopeImage.pack(pady=2)
 
 # Enabled/Disabled slider
-global enabled
-enabled = False
-sliderButton = createImageButton(root, "Images/slider_0.png", (220, 80), sliderToggle)
+with open("appdata.json") as rFile:
+    data = json.load(rFile)
+    enabled = data["settings"]["enabled"]
+sliderImage = "Images/slider_0.png"
+sliderText = "Disabled"
+sliderColor = "#f78686"
+if (enabled):
+    sliderImage = "Images/slider_1.png"
+    sliderText = "Enabled"
+    sliderColor = "#b6d7a8"
+sliderButton = createImageButton(root, sliderImage, (220, 80), sliderToggle)
 sliderButton.pack()
 
 # Enabled/disabled text
-sliderText = Label(root, text="Disabled", font=("Roboto", 16), foreground="#f78686", background="#1e1e1e")
+sliderText = Label(root, text=sliderText, font=("Roboto", 16), foreground=sliderColor, background="#1e1e1e")
 sliderText.config(anchor="center")
 sliderText.place(x=480,y=185)
 
@@ -161,8 +225,8 @@ behaviorLabel.place(x=210, y=335)
 
 # Behavior radio button options
 behavior = IntVar(root)
-lostFocusSelector = Radiobutton(root, text="Mute on Lost Focus", value=0, variable=behavior, background="#1e1e1e", activebackground="#1e1e1e", foreground="white", activeforeground="white", command=behaviorSelect, selectcolor="black", font=("Roboto", 12), cursor="hand2")
-enterFocusSelector = Radiobutton(root, text="Mute on Enter Focus", value=1, variable=behavior, background="#1e1e1e", activebackground="#1e1e1e", foreground="white", activeforeground="white", command=behaviorSelect, selectcolor="black", font=("Roboto", 12), cursor="hand2")
+lostFocusSelector = Radiobutton(root, text="Mute on Lost Focus", value=0, variable=behavior, background="#1e1e1e", activebackground="#1e1e1e", foreground="white", activeforeground="white", selectcolor="black", font=("Roboto", 12), cursor="hand2")
+enterFocusSelector = Radiobutton(root, text="Mute on Enter Focus", value=1, variable=behavior, background="#1e1e1e", activebackground="#1e1e1e", foreground="white", activeforeground="white", selectcolor="black", font=("Roboto", 12), cursor="hand2")
 lostFocusSelector.place(x=210, y=370)
 enterFocusSelector.place(x=210, y=400)
 
