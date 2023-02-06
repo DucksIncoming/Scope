@@ -1,24 +1,63 @@
 from tkinter import *
+import ctypes
 from tkinter import ttk, font, messagebox
 from PIL import ImageTk, Image
 from datetime import date
 import webbrowser
 import json
+from win32 import win32gui
+from win32.win32gui import GetWindowText, GetForegroundWindow
 import subprocess
-import os
+from ctypes import wintypes, windll, create_unicode_buffer
+from pycaw.pycaw import AudioUtilities, ISimpleAudioVolume
+from typing import Optional
+
+'''
+def getFocusedWindow():
+    try:
+        pid = win32process.GetWindowThreadProcessId(win32gui.GetForegroundWindow())
+        return(psutil.Process(pid[-1]).name())
+    except:
+        pass
+'''
+def applyRules():
+    #print(getFocusedWindow())
+    rulePrograms = []
+    ruleBehavior = []
+
+    with open("appdata.json") as rFile:
+        data = json.load(rFile)
+        for rule in data["rules"]:
+            rulePrograms.append(rule)
+            ruleBehavior.append(data["rules"][rule]["behavior"])
+    
+    sessions = AudioUtilities.GetAllSessions()
+    cmd = 'powershell "gps | where {$_.MainWindowTitle } | select Description'
+    proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
+    for p in proc.stdout:
+        progName = ""
+        if p.rstrip():
+            progName = p.decode().rstrip()
+        if (progName in rulePrograms):    
+            for session in sessions:
+                volume = session._ctl.QueryInterface(ISimpleAudioVolume)
+                if (session.Process):
+                    #print(session.Process.name())
+                    currentBehavior = ruleBehavior[rulePrograms.index(progName)]
+                    volume.SetMasterVolume(0, None)
+                    #print(active_window_process_name())
+                    
 
 def getActivePrograms():
     global programs
+    sessions = AudioUtilities.GetAllSessions()
     programs = []
     cmd = 'powershell "gps | where {$_.MainWindowTitle } | select Description'
     proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
     for line in proc.stdout:
         if line.rstrip():
-            # only print lines that are not empty
-            # decode() is necessary to get rid of the binary string (b')
-            # rstrip() to remove `\r\n`
             prog = line.decode().rstrip()
-            if (not prog == "Description" and not prog == "-----------" and not prog == "Application Frame Host"):
+            if (not prog == "Description" and not prog == "-----------" and not prog == "Application Frame Host" and not prog == "Settings"):
                 programs.append(prog)
     return programs
 
@@ -174,6 +213,11 @@ def sliderToggle():
     with open("appdata.json", "w") as f:
         json.dump(data, f, indent=4)
 
+def programSelect(*args):
+    global programs
+    programs = getActivePrograms()
+    programList.configure(values=programs)
+
 # Global variables
 global startWithWindows
 global minimize
@@ -232,6 +276,7 @@ programs = getActivePrograms()
 selectedProgram = StringVar(root)
 selectedProgram.set("Select Program")
 programList = ttk.Combobox(root, values=programs, state="readonly", textvariable=selectedProgram)
+selectedProgram.trace("w", programSelect)
 programList.config(width=100)
 programList.pack(pady=20)
 
@@ -278,4 +323,5 @@ editButton.place(x=930, y=530)
 deleteButton = createImageButton(root, "Images/delete.png", (40,40), bCommand=delete)
 deleteButton.place(x=930, y=575)
 
+applyRules()
 root.mainloop()
