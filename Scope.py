@@ -1,12 +1,38 @@
+# Scope v1.0 by DucksIncoming
+# Version last edited 2/7/2023
+# https://github.com/DucksIncoming/Scope
+
 from tkinter import *
 from tkinter import ttk, font, messagebox
 from PIL import ImageTk, Image
 from datetime import date
 import webbrowser
 import json
-from win32 import win32gui, win32api
+from win32 import win32gui
 import win32process, psutil
+import pystray
+from pystray import MenuItem as item
 from pycaw.pycaw import AudioUtilities
+import time
+import sys
+import os
+
+def updateStartup():
+    with open("appdata.json") as rFile:
+        data = json.load(rFile)
+        startup = data["settings"]["startWithWindows"]
+    fileData = (__file__).split("\\")
+    user = fileData[2]
+    filepath = "C:\\Users\\" + user + "\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup"
+    if (startup):
+        os.path.realpath(filepath)
+        os.startfile(filepath)
+
+def resetAudio():
+    sessions = AudioUtilities.GetAllSessions()
+    for session in sessions:
+        volume = session.SimpleAudioVolume
+        volume.SetMasterVolume(1, None)
 
 def getFocusedWindow():
     try:
@@ -14,6 +40,77 @@ def getFocusedWindow():
         return(psutil.Process(pid[-1]).name())
     except:
         pass
+
+# Implementation for minimizing to tray taken from this thread: https://stackoverflow.com/questions/54835399/running-a-tkinter-window-and-pystray-icon-together
+def quit_window(icon, item):
+    global ending
+    ending = True
+    global continueTrayRules
+    global stopAllRules
+    continueTrayRules = False
+    stopAllRules = True
+    icon.stop()
+    resetAudio()
+    sys.exit()
+
+def show_window(icon, item):
+    global enabled
+    global continueTrayRules
+    continueTrayRules = False
+    icon.stop()
+    root.after(0,root.deiconify)
+    enabled = not enabled # hacky ass workaround lol
+    sliderToggle()
+
+def withdraw_window():  
+    root.withdraw()
+    image = Image.open("ico.png")
+    menu = (item('Show GUI', show_window), item('Toggle Scope', trayToggle), item('Quit', quit_window))
+    icon = pystray.Icon("Scope", image, "Scope", menu)
+    
+    with open("appdata.json") as rFile:
+        data = json.load(rFile)
+        minimizeOnClose = data["settings"]["minimize"]
+
+    if (minimizeOnClose):
+        icon.run_detached()
+        trayApplyRules()
+    else:
+        resetAudio()
+        root.destroy()
+
+def trayApplyRules():
+    global continueTrayRules
+    continueTrayRules = True
+    while continueTrayRules:
+        rulePrograms = []
+        ruleBehavior = []
+
+        with open("appdata.json") as rFile:
+            data = json.load(rFile)
+            enabled = data["settings"]["enabled"]
+            for rule in data["rules"]:
+                rulePrograms.append(rule)
+                ruleBehavior.append(data["rules"][rule]["behavior"])
+
+        if (not enabled):
+            resetAudio()
+        else:
+            sessions = AudioUtilities.GetAllSessions()
+            for session in sessions:
+                volume = session.SimpleAudioVolume
+                if session.Process:
+                    processName = session.Process.name().lower()
+                    if processName in rulePrograms and getFocusedWindow():
+                        focused = (getFocusedWindow().lower() == processName)
+                        i = rulePrograms.index(processName)
+                        if (bool(ruleBehavior[i]) == focused):
+                            volume.SetMasterVolume(0, None)
+                        else:
+                            volume.SetMasterVolume(1, None)
+                    else:
+                        volume.SetMasterVolume(1, None)
+        time.sleep(0.2)
 
 def applyRules():
     rulePrograms = []
@@ -26,34 +123,29 @@ def applyRules():
             rulePrograms.append(rule)
             ruleBehavior.append(data["rules"][rule]["behavior"])
 
-    sessions = AudioUtilities.GetAllSessions()
-    for session in sessions:
-        volume = session.SimpleAudioVolume
-        if session.Process:
-            processName = session.Process.name().lower()
-            if processName in rulePrograms:
-                focused = False
-                i = rulePrograms.index(processName)
-                if (getFocusedWindow().lower() == processName):
-                    focused = True
-                if (enabled):
-                    if (ruleBehavior[i] == 0 and (not focused)):
-                        volume.SetMute(1, None)
-                    elif (ruleBehavior[i] == 1 and (focused)):
-                        volume.SetMute(1, None)
-                    elif (ruleBehavior[i] == 0 and (focused)):
-                        volume.SetMute(0, None)
-                    elif (ruleBehavior[i] == 1 and (not focused)):
-                        volume.SetMute(0, None)
-
+    if (not enabled):
+        resetAudio()
+    else:
+        sessions = AudioUtilities.GetAllSessions()
+        for session in sessions:
+            volume = session.SimpleAudioVolume
+            if session.Process:
+                processName = session.Process.name().lower()
+                if processName in rulePrograms and getFocusedWindow():
+                    focused = (getFocusedWindow().lower() == processName)
+                    i = rulePrograms.index(processName)
+                    if (bool(ruleBehavior[i]) == focused):
+                        volume.SetMasterVolume(0, None)
+                    else:
+                        volume.SetMasterVolume(1, None)
                 else:
-                    volume.SetMute(0, None)
-            else:
-                volume.SetMute(0, None)
-        else:
-            volume.SetMute(0, None)
-    root.after(200, applyRules)
-
+                    volume.SetMasterVolume(1, None)
+    if (not ending):
+        root.after(200, applyRules)
+    else:
+        resetAudio()
+        sys.exit()
+    
 def getActivePrograms():
     global programs
     programs = []
@@ -101,9 +193,9 @@ def settingsToggle():
 
     # Checkboxes
     startWithWindows = IntVar(settingsPopup)
-    startWinCheckbox = Checkbutton(settingsPopup, variable=startWithWindows, command=settingSelect, text="Start with Windows", font=("Roboto", 12), background="#1e1e1e", foreground="white", activebackground="#1e1e1e", activeforeground="white", selectcolor="black")
+    startWinCheckbox = Checkbutton(settingsPopup, variable=startWithWindows, command=startWithWinSelect, text="Start with Windows", font=("Roboto", 12), background="#1e1e1e", foreground="white", activebackground="#1e1e1e", activeforeground="white", selectcolor="black")
     minimize = IntVar(settingsPopup)
-    minimizeCheckbox = Checkbutton(settingsPopup, variable=minimize, command=settingSelect, text="Minimize to Tray", font=("Roboto", 12), background="#1e1e1e", foreground="white", activebackground="#1e1e1e", activeforeground="white", selectcolor="black")
+    minimizeCheckbox = Checkbutton(settingsPopup, variable=minimize, command=minimizeSelect, text="Minimize to Tray", font=("Roboto", 12), background="#1e1e1e", foreground="white", activebackground="#1e1e1e", activeforeground="white", selectcolor="black")
 
     with open("appdata.json") as rFile:
         data = json.load(rFile)
@@ -126,16 +218,27 @@ def settingsToggle():
     f.configure(underline=True)
     link.configure(font=f)
 
-def settingSelect():
+def minimizeSelect():
+    global startWithWindows
+    global minimize
+
+    with open("appdata.json") as rFile:
+        data = json.load(rFile)
+        data["settings"]["minimize"] = bool(minimize.get())
+    with open("appdata.json", "w") as f:
+        json.dump(data, f, indent=4)
+
+def startWithWinSelect():
     global startWithWindows
     global minimize
 
     with open("appdata.json") as rFile:
         data = json.load(rFile)
         data["settings"]["startWithWindows"] = bool(startWithWindows.get())
-        data["settings"]["minimize"] = bool(minimize.get())
     with open("appdata.json", "w") as f:
         json.dump(data, f, indent=4)
+
+    updateStartup()
 
 def refreshRuleTree():
     ruleTree.delete(*ruleTree.get_children())
@@ -200,6 +303,17 @@ def delete():
     except:
         pass
 
+def trayToggle():
+    global enabled
+    enabled = not enabled
+
+    with open("appdata.json") as rFile:
+        data = json.load(rFile)
+        tempData = data["settings"]
+        tempData["enabled"] = enabled
+    with open("appdata.json", "w") as f:
+        json.dump(data, f, indent=4)
+
 def sliderToggle():
     global enabled
     if (enabled):
@@ -234,10 +348,12 @@ global enabled
 # Base window setup
 root = Tk()
 root.title("Scope")
-root.iconphoto(True, PhotoImage(file="Images/ico.png"))
+root.iconphoto(True, PhotoImage(file="ico.png"))
 root.resizable(width=False, height=False)
 root.geometry("1050x700")
 root["background"] = "#1e1e1e"
+ending = False
+#root.wm_attributes('-toolwindow', 'true')
 
 # Style stuff
 style = ttk.Style()
@@ -331,10 +447,15 @@ editButton.place(x=930, y=530)
 deleteButton = createImageButton(root, "Images/delete.png", (40,40), bCommand=delete)
 deleteButton.place(x=930, y=575)
 
+stopAllRules = False
 applyRules()
+root.protocol('WM_DELETE_WINDOW', withdraw_window)
 root.mainloop()
 
-sessions = AudioUtilities.GetAllSessions()
-for session in sessions:
-    volume = session.SimpleAudioVolume
-    volume.SetMute(0, None)
+with open("appdata.json") as rFile:
+    data = json.load(rFile)
+    minimizeOnClose = data["settings"]["minimize"]
+
+if (minimizeOnClose):
+    withdraw_window()
+resetAudio()
